@@ -8,9 +8,11 @@ import ListingsPage from './pages/listings/listingpage.jsx';
 import ListingDetail from './pages/listings/listingdetail.jsx';
 import NewListing from './pages/listings/newlisting.jsx';
 import EditListing from './pages/listings/editlisting.jsx';
+import { AuthProvider } from './context/authcontext.jsx';
 function App() {
   return (
     <Router>
+       <AuthProvider>
             <div className="min-h-screen flex flex-col">
         <Navbar />
         <Routes>
@@ -24,6 +26,7 @@ function App() {
         </Routes>
         <Footer/>
       </div>
+      </AuthProvider>
     </Router>
   );
 }

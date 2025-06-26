@@ -3,52 +3,90 @@ import { createContext, useContext, useState, useEffect } from 'react';
 import authService  from '../services/authservice';
 import { toast } from 'react-hot-toast';
 import api from '../services/api';
+import { useNavigate } from 'react-router-dom';
 const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
+    const navigate = useNavigate();
+
+    // Check authentication on app start (with localStorage)
+    useEffect(() => {
+        const checkAuth = async () => {
+            try {
+                const userData = localStorage.getItem("user");
+                const isLoggedIn = localStorage.getItem("isLoggedIn");
+
+                if (userData) {
+                    setUser(JSON.parse(userData));
+                } else if (isLoggedIn) {
+                    const response = await api.get("/auth/current-user", { withCredentials: true });
+                    if (response.data?.data?.userobject) {
+                        setUser(response.data.data.userobject);
+                    }
+                }
+            } catch (error) {
+                console.error("Auth check failed:", error);
+                setUser(null);
+            } finally {
+                setLoading(false);
+            }
+        };
+        checkAuth();
+    }, []);
+
+    // Backend warmup effect
+    useEffect(() => {
+        const warmup = async () => {
+            const hasPinged = sessionStorage.getItem("pinged");
+            if (!hasPinged) {
+                try {
+                    await api.get("/ping");
+                    sessionStorage.setItem("pinged", "true");
+                } catch (err) {
+                    // Backend still sleeping...
+                }
+            }
+        };
+        warmup();
+    }, []);
 
     const login = async (credentials) => {
         try {
-            const data = await authService.login(credentials);
-            setUser(data.data.user);
+            const response = await authService.login(credentials);
+            if (!response || !response.data) {
+                throw new Error("Invalid response from the server");
+            }
+            localStorage.setItem("user", JSON.stringify(response.data));
+            localStorage.setItem("isLoggedIn", "true");
+            setUser(response.data);
             toast.success('Welcome back!');
+            navigate("/");
         } catch (error) {
-            toast.error(error.message);
+            toast.error(error.message || 'Login failed. Please try again.');
             throw error;
         }
     };
 
     const register = async (userData) => {
         try {
-            console.log("Inside register function in AuthContext", userData);
-            
-            // Call the authService to register the user
-            const response = await authService.register(userData);  //we are getting response.data and we are naming it as response here
-            
-            console.log("User registered successfully", response);
-            
-            console.log("Full API Response:", response);
-
-         
-            console.log("Response Data:", response.data);
-            // Check if response has user data
-            if (!response || !response.data || !response.data.user) {
+            const response = await authService.register(userData);
+            if (!response || !response.data) {
                 throw new Error("Invalid response from the server");
             }
-    
-            // Set user in state
+            const token = response.data.token;
+            const userObj = response.data.userobject;
+            localStorage.setItem("token", token);
+            localStorage.setItem("user", JSON.stringify(userObj));
+            localStorage.setItem("isLoggedIn", "true");
             setUser(response.data.user);
             const welcomeMessage = userData.role === 'hotel_lister' 
             ? 'Welcome to Wanderlust as a Hotel Lister!' 
             : 'Welcome to Wanderlust!';
         toast.success(welcomeMessage);
-           
+           navigate("/");
         } catch (error) {
-            console.error("Error during registration:", error);
-    
-            // Extract error message correctly
             const errorMessage = error?.message || error?.response?.data?.message || "Signup failed. Please try again.";
     
             // Show error message in toast
@@ -61,51 +99,27 @@ export const AuthProvider = ({ children }) => {
 
     const logout = async () => {
         try {
-            await authService.logout();
-            setUser(null);
-            toast.success('Logged out successfully');
+            const response = await authService.logout();
+            if (response.status === 200) {
+                localStorage.removeItem("user");
+                localStorage.removeItem("isLoggedIn");
+                setUser(null);
+                toast.success('Logged out successfully');
+                navigate('/login');
+            }
         } catch (error) {
             toast.error('Error logging out');
             throw error;
         }
     };
+
     const isHotelLister = () => {
         return user?.role === 'hotel_lister';
     };
 
-    useEffect(() => {
-        const checkAuth = async () => {
-            try {
-               
-                const response = await api.get("/auth/current-user");  // Use existing route
-              
-
-                 //console.log(response.data)
-                if (response.data.data.userobject) {
-
-                    setUser(response.data.data.userobject);
-                }
-            } catch (error) {
-                console.error("Auth check failed:", error);
-            } finally {
-                setLoading(false);
-            }
-        };
-    
-        checkAuth();
-    }, []);
-    
-
     return (
         <AuthContext.Provider 
-            value={{ 
-                user, 
-                login, 
-                logout, 
-                register, 
-                loading,
-                isHotelLister
-            }}
+            value={{ user, setUser, login, logout, register, loading, isHotelLister }}
         >
             {!loading && children}
         </AuthContext.Provider>
