@@ -30,7 +30,7 @@ mongoose.connect(dbUrl)
 app.use(cookieParser());
 // CORS Middleware
 app.use(cors({
-    origin: "https://prime-stays.vercel.app",  
+    origin:["https://prime-stays.vercel.app","http://localhost:5173" ], 
     credentials: true, 
     methods: ["GET", "POST", "PUT", "DELETE"],  
     allowedHeaders: ["Content-Type", "Authorization"]  
@@ -47,7 +47,9 @@ app.use("/images", express.static("public/images"));
 app.use("/api/listings", listingRoutes);
 app.use("/api/listing", reviewsRoutes);  
 app.use("/api/auth", userRoutes);
-
+app.get("/api/ping", (req, res) => {
+    res.status(200).send("pong");
+  });
 //  404 Handler for Invalid Routes
 app.use((req, res, next) => {
     res.status(404).json({
